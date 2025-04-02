@@ -1,0 +1,37 @@
+# 相关配置
+server:
+  model: debug
+  # 端口
+  part: :8888
+  # banner 配置
+  banner:
+    # banner 文件的名字
+    name: banner.txt
+    # 是否加载
+    loading: true
+# 数据库相关配置
+data:
+  # 数据类型
+  category: mysql
+  # 表前缀
+  prefix: tw_
+  # 数据库名称
+  database: tw_test
+  # 链接
+  ip: 127.0.0.1
+  # 端口
+  part: 3306
+  # 用户名
+  username: root
+  # 密码
+  password: lilinhu123
+  # 打印sql
+  sql: true
+  # 初始化SQL配置
+  init:
+    name: init.sql
+    status: false
+  # 测试数据SQL配置
+  test:
+    name: test.sql
+    status: false
