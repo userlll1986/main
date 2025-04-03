@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"go_project/config"
+	"github.com/userlll1986/main/config"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
