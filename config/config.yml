@@ -16,7 +16,7 @@ data:
   # 表前缀
   prefix: tw_
   # 数据库名称
-  database: tw_test
+  database: llhweb
   # 链接
   ip: 127.0.0.1
   # 端口
