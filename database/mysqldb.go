@@ -5,10 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/userlll1986/main/config"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
+	"github.com/userlll1986/main/config"
 )
 
 var Db *gorm.DB
@@ -45,7 +44,7 @@ func InitDb(config *config.Config) {
 	Db.DB().SetConnMaxLifetime(10 * time.Second)
 	// 判断是否需要用来映射结构体到到数据库
 	if config.Data.Init.Status {
-		Db.AutoMigrate(&entity.Article{})
+		Db.AutoMigrate(&User{})
 	}
 
 	log.Printf("连接数据库【%s:%s/%s】成功", config.Data.Ip, config.Data.Part, config.Data.DataBase)
