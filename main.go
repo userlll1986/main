@@ -1,12 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	mysqldb_test "main/database"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/userlll1986/main/config"
 )
 
 var (
@@ -96,6 +100,12 @@ func main() {
 		log.Printf("Defaulting to port %s", port)
 	}
 
+	// 读取配置文件
+	myconfig := config.NewConfig()
+	myconfig.ReadConfig()
+	// 初始化数据库连接
+	mysqldb_test.InitDb(myconfig)
+
 	// Starts a new Gin instance with no middle-ware
 	r := gin.New()
 
@@ -111,6 +121,14 @@ func main() {
 	// 使用限流中间件
 	r.Use(limiter.Middleware)
 
+	//使用数据库中间件
+	// 将db作为中间件传递给路由处理函数
+	r.Use(func(c *gin.Context) {
+		c.Set("db", mysqldb_test.Db)
+		c.Next()
+	})
+	// 在路由处理函数中可以通过c.MustGet("db").(*gorm.DB)获取到db对象，然后进行数据库操作
+
 	// Define handlers
 	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello World!")
@@ -119,7 +137,92 @@ func main() {
 		c.String(http.StatusOK, "pong")
 	})
 
+	r.GET("/user/:name/*action", func(c *gin.Context) {
+		name := c.Param("name")
+		action := c.Param("action")
+		//截取/
+		action = strings.Trim(action, "/")
+		c.String(http.StatusOK, name+" is "+action)
+	})
+	//处理表单数据
+	//<form action="http://localhost:8080/form" method="post" action="application/x-www-form-urlencoded">
+	// 	用户名：<input type="text" name="username" placeholder="请输入你的用户名">  <br>
+	// 	密&nbsp;&nbsp;&nbsp;码：<input type="password" name="userpassword" placeholder="请输入你的密码">  <br>
+	// 	<input type="submit" value="提交">
+	// </form>
+	r.POST("/form", func(c *gin.Context) {
+		types := c.DefaultPostForm("type", "post")
+		username := c.PostForm("username")
+		password := c.PostForm("userpassword")
+		// c.String(http.StatusOK, fmt.Sprintf("username:%s,password:%s,type:%s", username, password, types))
+		c.String(http.StatusOK, fmt.Sprintf("username:%s,password:%s,type:%s", username, password, types))
+	})
+	//处理文件上传
+	// <form action="http://localhost:8080/upload" method="post" enctype="multipart/form-data">
+	//       上传文件:<input type="file" name="file" >
+	//       <input type="submit" value="提交">
+	// </form>
+	r.MaxMultipartMemory = 8 << 20
+	r.POST("/upload", func(c *gin.Context) {
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.String(500, "上传图片出错")
+		}
+		// c.JSON(200, gin.H{"message": file.Header.Context})
+		c.SaveUploadedFile(file, file.Filename)
+		c.String(http.StatusOK, file.Filename)
+	})
+
+	//上传多个文件
+	//<form action="http://localhost:8000/uploads" method="post" enctype="multipart/form-data">
+	// 	上传文件:<input type="file" name="files" multiple>
+	// 	<input type="submit" value="提交">
+	// </form>
+	// 限制表单上传大小 8MB，默认为32MB
+	r.MaxMultipartMemory = 8 << 20
+	r.POST("/uploads", func(c *gin.Context) {
+		form, err := c.MultipartForm()
+		if err != nil {
+			c.String(http.StatusBadRequest, fmt.Sprintf("get err %s", err.Error()))
+		}
+		// 获取所有图片
+		files := form.File["files"]
+		// 遍历所有图片
+		for _, file := range files {
+			// 逐个存
+			if err := c.SaveUploadedFile(file, file.Filename); err != nil {
+				c.String(http.StatusBadRequest, fmt.Sprintf("upload err %s", err.Error()))
+				return
+			}
+		}
+		c.String(200, fmt.Sprintf("upload ok %d files", len(files)))
+	})
+
+	// 路由组1 ，处理GET请求
+	v1 := r.Group("/v1")
+	// {} 是书写规范
+	{
+		v1.GET("/login", login)
+		v1.GET("submit", submit)
+	}
+	// 路由组2 ，处理POST请求
+	v2 := r.Group("/v2")
+	{
+		v2.POST("/login", login)
+		v2.POST("/submit", submit)
+	}
+
 	// Listen and serve on defined port
 	log.Printf("Listening on port %s", port)
 	r.Run(":" + port)
+}
+
+func login(c *gin.Context) {
+	name := c.DefaultQuery("name", "jack")
+	c.String(200, fmt.Sprintf("hello %s\n", name))
+}
+
+func submit(c *gin.Context) {
+	name := c.DefaultQuery("name", "lily")
+	c.String(200, fmt.Sprintf("hello %s\n", name))
 }

@@ -30,7 +30,7 @@ data:
   # 初始化SQL配置
   init:
     name: init.sql
-    status: false
+    status: true
   # 测试数据SQL配置
   test:
     name: test.sql
