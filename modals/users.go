@@ -1,4 +1,4 @@
-package modals
+package mymodals
 
 // User 结构体声明
 type User struct {

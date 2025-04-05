@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
 	"github.com/userlll1986/main/config"
 )
 
@@ -219,6 +220,9 @@ func main() {
 
 func login(c *gin.Context) {
 	name := c.DefaultQuery("name", "jack")
+	var users []mymodals.User
+	var db = c.MustGet("db").(*gorm.DB)
+	db.Table("users").Where("name = ?", name).First()
 	c.String(200, fmt.Sprintf("hello %s\n", name))
 }
 

@@ -14,12 +14,12 @@ var Db *gorm.DB
 var err error
 
 // User 结构体声明
-type User struct {
-	UserId    int64  `gorm:"primaryKey;autoIncrement"`
-	UserName  string `gorm:"not null;type:varchar(32)"`
-	UserPwd   string `gorm:"not null;type:varchar(128)"`
-	UserPhone string `gorm:"unique;type:varchar(32)"`
-}
+// type User struct {
+// 	UserId    int64  `gorm:"primaryKey;autoIncrement"`
+// 	UserName  string `gorm:"not null;type:varchar(32)"`
+// 	UserPwd   string `gorm:"not null;type:varchar(128)"`
+// 	UserPhone string `gorm:"unique;type:varchar(32)"`
+// }
 
 // 数据库配置
 func InitDb(config *config.Config) {
@@ -73,9 +73,9 @@ func InitDb(config *config.Config) {
 		// 	Db.Create(&user)
 		// }
 		// 查询全部记录
-		// var users []User
-		// Db.Find(&users)
-		// Db.Where("user_name = ?", "wjj").Find(&users)
+		var users []mymodals.User
+		Db.Find(&users)
+		Db.Where("user_name = ?", "wjj").Find(&users)
 		// Db.First(&users)
 		// // 打印结果
 		// fmt.Println(users)
