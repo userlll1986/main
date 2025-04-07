@@ -24,6 +24,9 @@ go get -u gopkg.in/yaml.v2
 go get -u github.com/gin-gonic/gin
 go get -u github.com/go-sql-driver/mysql
 
-
-
-
+gin-web测试脚本的编写
+curl -X POST -H "Content-Type: application/json" -d '{"name": "test"}' http://localhost:8080/v2/login
+curl -X GET -H "Content-Type: application/json" http://localhost:8080/v1/login
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "username=value1&userpassword=value2" http://localhost:8080/form
+curl -X POST -H "Content-Type:multipart/form-data" -F "file=@/Users/lilin/Downloads/kongfu.png" http://localhost:8080/upload
+curl -X GET -H "Content-Type: application/json" http://localhost:8080/get/lilinhu

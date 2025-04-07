@@ -4,15 +4,46 @@ import (
 	"fmt"
 	"log"
 	mysqldb_test "main/database"
+	mymodals "main/modals"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/jinzhu/gorm"
+	"github.com/olivere/elastic/v7"
+	"github.com/streadway/amqp"
 	"github.com/userlll1986/main/config"
 )
+
+// RabbitMQ中间件
+func RabbitMQMiddleware(conn *amqp.Connection, queueName string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 创建RabbitMQ通道
+		ch, err := conn.Channel()
+		if err != nil {
+			c.AbortWithError(500, err)
+			return
+		}
+		defer ch.Close()
+
+		// 操作RabbitMQ队列
+		_, err = ch.QueueDeclare(queueName, false, false, false, false, nil)
+		if err != nil {
+			c.AbortWithError(500, err)
+			return
+		}
+
+		// 将RabbitMQ连接和通道作为上下文信息传递给下一个处理器
+		c.Set("rabbitmq_conn", conn)
+		c.Set("rabbitmq_ch", ch)
+
+		// 继续处理下一个中间件或请求处理函数
+		c.Next()
+	}
+}
 
 var (
 	limiter = NewLimiter(10, 1*time.Minute) // 设置限流器，允许每分钟最多请求10次
@@ -130,6 +161,103 @@ func main() {
 	})
 	// 在路由处理函数中可以通过c.MustGet("db").(*gorm.DB)获取到db对象，然后进行数据库操作
 
+	// 创建Redis客户端
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "127.0.0.1:54372", // Redis服务器地址
+		Password: "123456",          // Redis密码
+		DB:       0,                 // Redis数据库编号
+	})
+	// 使用Redis中间件
+	r.Use(func(c *gin.Context) {
+		// 在Gin的上下文中设置Redis客户端
+		c.Set("redis", redisClient)
+
+		// 继续处理后续的请求
+		c.Next()
+	})
+	// 定义路由和处理函数
+	r.GET("/get/:key", func(c *gin.Context) {
+		// 从上下文中获取Redis客户端
+		redisClient := c.MustGet("redis").(*redis.Client)
+
+		// 从URL参数中获取键名
+		key := c.Param("key")
+
+		// 使用Redis客户端进行GET操作
+		val, err := redisClient.Get(c, key).Result()
+		if err == redis.Nil {
+			c.JSON(200, gin.H{
+				"result": fmt.Sprintf("Key '%s' not found", key),
+			})
+		} else if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"result": val,
+			})
+		}
+	})
+
+	// 添加ES中间件,暂不使用
+	//r.Use(ElasticSearchMiddleware())
+
+	// 定义路由
+	// r.GET("/", func(c *gin.Context) {
+	// 	// 从上下文中获取ES客户端
+	// 	esClient := c.MustGet("esClient").(*elastic.Client)
+
+	// 	// 使用ES客户端进行查询
+	// 	// 这里只是一个示例，具体的ES查询操作可以根据实际需求进行修改
+	// 	_, _, err := esClient.Ping().Do(c.Request.Context())
+	// 	if err != nil {
+	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ping Elasticsearch"})
+	// 		return
+	// 	}
+
+	// 	c.JSON(http.StatusOK, gin.H{"message": "Hello from Gin with Elasticsearch middleware!"})
+	// })
+
+	// 创建RabbitMQ连接
+	conn, err := amqp.Dial("amqp://lafba13j4134:llhafaif99973@localhost:5672/")
+	if err != nil {
+		fmt.Println("连接RabbitMQ失败:", err)
+		return
+	}
+	defer conn.Close()
+
+	// 添加RabbitMQ中间件
+	r.Use(RabbitMQMiddleware(conn, "my_queue"))
+
+	// 定义路由和处理函数
+	r.GET("/rabbitmq", func(c *gin.Context) {
+		// 从上下文中获取RabbitMQ连接和通道
+		//conn := c.MustGet("rabbitmq_conn").(*amqp.Connection)
+		ch := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+
+		// 在处理函数中使用RabbitMQ连接和通道进行操作
+		// ...
+		body := []byte("Hello World!")
+		err = ch.Publish(
+			"",      // 交换机名称，""表示默认交换机
+			"hello", // 路由键（队列名称）
+			false,   // 是否持久化消息内容
+			false,   // 是否将消息推送到所有消费者（公平分发）
+			amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        body,
+			},
+		)
+		if err != nil {
+			log.Panicf("Failed to publish a message: %v", err)
+		}
+
+		c.JSON(200, gin.H{
+			"message": "Hello RabbitMQ!",
+		})
+	})
+
 	// Define handlers
 	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello World!")
@@ -219,14 +347,32 @@ func main() {
 }
 
 func login(c *gin.Context) {
-	name := c.DefaultQuery("name", "jack")
+	// name := c.DefaultQuery("name", "jack")
 	var users []mymodals.User
 	var db = c.MustGet("db").(*gorm.DB)
-	db.Table("users").Where("name = ?", name).First()
-	c.String(200, fmt.Sprintf("hello %s\n", name))
+	db.Where("user_id = ?", 2).Find(&users)
+	c.String(200, fmt.Sprintf("hello %s\n", users[0].UserName))
 }
 
 func submit(c *gin.Context) {
 	name := c.DefaultQuery("name", "lily")
 	c.String(200, fmt.Sprintf("hello %s\n", name))
+}
+
+// ElasticSearchMiddleware 是用于处理ES请求的中间件
+func ElasticSearchMiddleware() gin.HandlerFunc {
+	// 创建ES客户端
+	client, err := elastic.NewClient(elastic.SetURL("http://localhost:9200"))
+	if err != nil {
+		panic(err)
+	}
+
+	// 返回Gin中间件处理函数
+	return func(c *gin.Context) {
+		// 将ES客户端添加到上下文中
+		c.Set("esClient", client)
+
+		// 继续处理下一个中间件或路由处理函数
+		c.Next()
+	}
 }

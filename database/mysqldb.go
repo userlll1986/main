@@ -3,6 +3,7 @@ package mysqldb_test
 import (
 	"fmt"
 	"log"
+	mymodals "main/modals"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
