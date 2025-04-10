@@ -7,6 +7,7 @@ import (
 	mymodals "main/modals"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,11 +30,59 @@ func RabbitMQMiddleware(conn *amqp.Connection, queueName string) gin.HandlerFunc
 		}
 		defer ch.Close()
 
-		// 操作RabbitMQ队列
+		// 操作RabbitMQ队列QueueDeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, boolean autoDelete, IDictionary<string, object> arguments);
+
+		//queue‌：声明的队列名称。my_queue
+		// ‌durable‌：是否持久化，设置为true表示队列在RabbitMQ重启后依然存在，设置为false则队列在重启后会被删除。
+		// ‌exclusive‌：是否排外，设置为true表示该队列只能在创建它的连接（connection）中使用，连接关闭后队列会被删除。
+		// ‌autoDelete‌：是否自动删除，设置为true表示当最后一个消费者断开连接后，队列会被自动删除。
+		// ‌arguments‌：附加参数，用于设置队列的额外属性，例如消息的TTL（Time-To-Live）等。
 		_, err = ch.QueueDeclare(queueName, false, false, false, false, nil)
 		if err != nil {
 			c.AbortWithError(500, err)
 			return
+		}
+		// prepareExchange 准备rabbitmq的Exchange
+		err1 := ch.ExchangeDeclare(
+			"main_exchange", // exchange
+			"direct",        // type
+			true,            // durable 是否持久化，默认持久需要根据情况选择
+			false,           // autoDelete
+			false,           // internal
+			false,           // noWait
+			nil,             // args
+		)
+		if nil != err1 {
+			c.AbortWithError(500, err1)
+			return
+		}
+		//声明队列,直接初始化队列
+		_, err = ch.QueueDeclare("test-qq", false, false, false, false, nil)
+		if err != nil {
+			c.AbortWithError(500, err)
+			return
+		}
+		//声明队列,直接初始化队列
+		_, err = ch.QueueDeclare("test-qq2", false, false, false, false, nil)
+		if err != nil {
+			c.AbortWithError(500, err)
+			return
+		}
+		//声明队列,直接初始化队列
+		_, err = ch.QueueDeclare("test-qq3", false, false, false, false, nil)
+		if err != nil {
+			c.AbortWithError(500, err)
+			return
+		}
+		// 绑定队列到交换机
+		if err := ch.QueueBind("test-qq", "wodekey.log.info", "main_exchange", false, nil); err != nil {
+			log.Fatal("队列绑定交换机出错", err)
+		}
+		if err := ch.QueueBind("test-qq2", "wodekey.log.debug", "main_exchange", false, nil); err != nil {
+			log.Fatal("队列绑定交换机出错2", err)
+		}
+		if err := ch.QueueBind("test-qq3", "wodekey.log.error", "main_exchange", false, nil); err != nil {
+			log.Fatal("队列绑定交换机出错2", err)
 		}
 
 		// 将RabbitMQ连接和通道作为上下文信息传递给下一个处理器
@@ -157,6 +206,7 @@ func main() {
 	// 将db作为中间件传递给路由处理函数
 	r.Use(func(c *gin.Context) {
 		c.Set("db", mysqldb_test.Db)
+
 		c.Next()
 	})
 	// 在路由处理函数中可以通过c.MustGet("db").(*gorm.DB)获取到db对象，然后进行数据库操作
@@ -171,7 +221,6 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		// 在Gin的上下文中设置Redis客户端
 		c.Set("redis", redisClient)
-
 		// 继续处理后续的请求
 		c.Next()
 	})
@@ -233,30 +282,73 @@ func main() {
 	// 定义路由和处理函数
 	r.GET("/rabbitmq", func(c *gin.Context) {
 		// 从上下文中获取RabbitMQ连接和通道
-		//conn := c.MustGet("rabbitmq_conn").(*amqp.Connection)
+		// conn := c.MustGet("rabbitmq_conn").(*amqp.Connection)
 		ch := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+		// 准备rabbitmq的Exchange
+		for i := 0; i < 100; i++ {
+			//mq.QueueSend("test-qq", amqp.Publishing{
+			//    AppId:       "",
+			//    ContentType: "application/json",
+			//    MessageId: "你好",
+			//    Body:        []byte("这是我的消息:" + strconv.Itoa(i)),
+			//})
+			//fmt.Println("发送成功: test-qq  ", i)
+			//time.Sleep(2 * time.Second)
+			//mq.QueueSend("test-qq2", amqp.Publishing{
+			//    AppId:       "",
+			//    ContentType: "application/json",
+			//    MessageId: "你好啊",
+			//    Body:        []byte("这是我的消息2:" + strconv.Itoa(i)),
+			//})
+			routingKey := "wodekey.log.info"
+			if i%2 == 0 {
+				routingKey = "wodekey.log.debug"
+			} else if i%3 == 0 {
+				routingKey = "wodekey.log.error"
+			}
 
+			//通过exchange发送消息
+			ch.Publish(
+				"main_exchange", //exchangeName
+				routingKey,      //routing key
+				true,            //mandatory
+				false,           //immediate
+				amqp.Publishing{
+					ContentType: "application/json",
+					Body:        []byte("这是我的消息哦" + strconv.Itoa(i)),
+				},
+			)
+
+			// mq.ExchangeSend("topic_exchange", "wodekey.random", amqp.Publishing{
+			// 	ContentType: "application/json",
+			// 	Body: []byte("这是我的消息哦" + strconv.Itoa(i)),
+			// })
+			fmt.Println("发送成功: exchange  ", i)
+			time.Sleep(1 * time.Second)
+		}
 		// 在处理函数中使用RabbitMQ连接和通道进行操作
 		// ...
-		body := []byte("Hello World!")
-		err = ch.Publish(
-			"",      // 交换机名称，""表示默认交换机
-			"hello", // 路由键（队列名称）
-			false,   // 是否持久化消息内容
-			false,   // 是否将消息推送到所有消费者（公平分发）
-			amqp.Publishing{
-				ContentType: "text/plain",
-				Body:        body,
-			},
-		)
-		if err != nil {
-			log.Panicf("Failed to publish a message: %v", err)
-		}
+		// body := []byte("Hello World!")
+		// err = ch.Publish(
+		// 	"",      // 交换机名称，""表示默认交换机
+		// 	"hello", // 路由键（队列名称）
+		// 	false,   // 是否持久化消息内容
+		// 	false,   // 是否将消息推送到所有消费者（公平分发）
+		// 	amqp.Publishing{
+		// 		ContentType: "text/plain",
+		// 		Body:        body,
+		// 	},
+		// )
+		// if err != nil {
+		// 	log.Panicf("Failed to publish a message: %v", err)
+		// }
 
 		c.JSON(200, gin.H{
 			"message": "Hello RabbitMQ!",
 		})
 	})
+
+	r.GET("/consume", myconsume)
 
 	// Define handlers
 	r.GET("/", func(c *gin.Context) {
@@ -375,4 +467,134 @@ func ElasticSearchMiddleware() gin.HandlerFunc {
 		// 继续处理下一个中间件或路由处理函数
 		c.Next()
 	}
+}
+
+func myconsume(c *gin.Context) {
+	// 从上下文中获取RabbitMQ连接和通道
+	// 创建RabbitMQ连接
+	// conn := c.MustGet("rabbitmq_conn").(*amqp.Connection)
+	// gchannel := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+	gconn, err := amqp.Dial("amqp://lafba13j4134:llhafaif99973@localhost:5672/")
+	if err != nil {
+		fmt.Println("连接RabbitMQ失败:", err)
+		return
+	}
+	defer gconn.Close()
+	log.Fatal("创建RabbitMQ连接")
+	// 创建RabbitMQ通道
+	gchannel, err := gconn.Channel()
+	if err != nil {
+		fmt.Println("连接Channel失败:", err)
+		c.AbortWithError(500, err)
+		return
+	}
+	log.Fatal("创建RabbitMQ通道")
+	defer gchannel.Close()
+	// 绑定队列到交换机
+	if err := gchannel.QueueBind("test-qq", "*.log.info", "main_exchange", false, nil); err != nil {
+		log.Fatal("队列绑定交换机出错", err)
+	}
+	if err := gchannel.QueueBind("test-qq2", "*.log.debug", "main_exchange", false, nil); err != nil {
+		log.Fatal("队列绑定交换机出错2", err)
+	}
+	if err := gchannel.QueueBind("test-qq3", "*.log.error", "main_exchange", false, nil); err != nil {
+		log.Fatal("队列绑定交换机出错2", err)
+	}
+	// log.Fatal("绑定队列到交换机")
+	err = gchannel.Qos(1, 0, true)
+	if err != nil {
+		log.Fatal("Failed to set QoS: ", err)
+	}
+	log.Fatal("set QoS")
+	// forever := make(chan bool)
+	log.Fatal("begin")
+	go func() {
+		//消费队列,内部方法会阻塞,使用时需要单独启用一个线程处理，常驻后台执行
+		// ch := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+		// log.Fatal("1")
+		// err := gchannel.Qos(1, 0, true)
+		// if err != nil {
+		// 	log.Fatal("Failed to set QoS: ", err)
+		// }
+		//后期可调整参数
+		delivery, err1 := gchannel.Consume(
+			"test-qq",   // queue
+			"consumer1", // consumer
+			false,       // auto-ack
+			false,       // exclusive
+			false,       // no-local
+			false,       // no-wait
+			nil,         // args
+		)
+		if err1 != nil {
+			log.Fatal("Queue Consume2: ", gchannel)
+		}
+		for d := range delivery {
+			fmt.Println(d.ConsumerTag+" test-qq消费成功:", string(d.Body))
+
+			d.Ack(true) //需手动应答
+			time.Sleep(2 * time.Second)
+		}
+	}()
+
+	go func() {
+		//消费队列,内部方法会阻塞,使用时需要单独启用一个线程处理，常驻后台执行
+		// ch := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+		log.Fatal("2")
+		// err := gchannel.Qos(1, 0, true)
+		// if err != nil {
+		// 	log.Fatal("Failed to set QoS: ", err)
+		// }
+		//后期可调整参数
+		delivery, err1 := gchannel.Consume(
+			"test-qq2",    // queue
+			"consumer002", // consumer
+			false,         // auto-ack
+			false,         // exclusive
+			false,         // no-local
+			false,         // no-wait
+			nil,           // args
+		)
+		if err1 != nil {
+			log.Fatal("Queue Consume4: ", gchannel)
+		}
+		for d := range delivery {
+			fmt.Println(d.ConsumerTag+" test-qq消费成功:", string(d.Body))
+
+			d.Ack(true) //需手动应答
+			time.Sleep(2 * time.Second)
+		}
+	}()
+
+	go func() {
+		//消费队列,内部方法会阻塞,使用时需要单独启用一个线程处理，常驻后台执行
+		// ch := c.MustGet("rabbitmq_ch").(*amqp.Channel)
+		log.Fatal("3")
+		// err := gchannel.Qos(1, 0, true)
+		// if err != nil {
+		// 	log.Fatal("Failed to set QoS: ", err)
+		// }
+		//后期可调整参数
+		delivery, err1 := gchannel.Consume(
+			"test-qq3",    // queue
+			"consumer003", // consumer
+			false,         // auto-ack
+			false,         // exclusive
+			false,         // no-local
+			false,         // no-wait
+			nil,           // args
+		)
+		if err1 != nil {
+			log.Fatal("Queue Consume6: ", gchannel)
+		}
+		for d := range delivery {
+			fmt.Println(d.ConsumerTag+" test-qq消费成功:", string(d.Body))
+
+			d.Ack(true) //需手动应答
+			time.Sleep(2 * time.Second)
+		}
+	}()
+	log.Fatal("end")
+	// <-forever
+	c.String(http.StatusOK, "Hello myconsume!")
 }
