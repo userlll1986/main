@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/jinzhu/gorm"
 	"github.com/olivere/elastic/v7"
 	"github.com/streadway/amqp"
 	"github.com/userlll1986/main/config"
@@ -440,10 +439,37 @@ func main() {
 
 func login(c *gin.Context) {
 	// name := c.DefaultQuery("name", "jack")
-	var users []mymodals.User
-	var db = c.MustGet("db").(*gorm.DB)
-	db.Where("user_id = ?", 2).Find(&users)
-	c.String(200, fmt.Sprintf("hello %s\n", users[0].UserName))
+	// var users []mymodals.User
+	// var db = c.MustGet("db").(*gorm.DB)
+	// db.Where("user_id = ?", 2).Find(&users)
+	// c.String(200, fmt.Sprintf("hello %s\n", users[0].UserName))
+	var req mymodals.AccountServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 这里进行实际的登录验证逻辑
+	log.Printf("登录请求: %v", req)
+	// 例如：检查用户名和密码是否匹配，验证码是否正确等
+	// 这里仅作示例，假设登录成功
+	loginSuccess := true
+
+	var resp mymodals.AccountServiceResponse
+	resp.Type = "AccountService"
+	resp.Tag = "account_login"
+
+	if loginSuccess {
+		resp.Result = "ok"
+		resp.Body.Length = 0
+	} else {
+		resp.Result = "error"
+		resp.Body.Length = 1
+		resp.Body.Detail = "用户名或密码错误"
+	}
+
+	// 将响应数据发送给客户端
+	c.JSON(http.StatusOK, resp)
 }
 
 func submit(c *gin.Context) {
