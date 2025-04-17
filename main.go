@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	mysqldb_test "main/database"
@@ -91,6 +93,13 @@ func RabbitMQMiddleware(conn *amqp.Connection, queueName string) gin.HandlerFunc
 		// 继续处理下一个中间件或请求处理函数
 		c.Next()
 	}
+}
+
+// 将密码进行 SHA-256 加密
+func hashPassword(password string) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(password))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 var (
@@ -448,28 +457,47 @@ func login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.Type == "AccountService" && req.Tag == "account_login" {
+		if result, err := account.callFunc("account_login", c, req.Type, req.Tag, req.Body); err != nil {
+			fmt.Println("Error:", err)
+		} else {
+			fmt.Println("Result of bar:", result[0].Int())
+		}
+		// // 这里进行实际的登录验证逻辑
+		// log.Printf("登录请求: %v,%v", req, req.Body["username"].(string))
+		// // 例如：检查用户名和密码是否匹配，验证码是否正确等
+		// var users []mymodals.User
+		// var db = c.MustGet("db").(*gorm.DB)
+		// db.Where("user_name = ?", req.Body["username"].(string)).Find(&users)
 
-	// 这里进行实际的登录验证逻辑
-	log.Printf("登录请求: %v", req)
-	// 例如：检查用户名和密码是否匹配，验证码是否正确等
-	// 这里仅作示例，假设登录成功
-	loginSuccess := true
+		// var resp mymodals.AccountServiceResponse
+		// resp.Type = "AccountService"
+		// resp.Tag = "account_login"
 
-	var resp mymodals.AccountServiceResponse
-	resp.Type = "AccountService"
-	resp.Tag = "account_login"
+		// if users != nil {
+		// 	// 验证密码是否正确
+		// 	hashedPassword := hashPassword(req.Body["password"].(string))
+		// 	log.Printf("hashedPassword: %s", hashedPassword)
+		// 	if users[0].UserPwd == req.Body["password"].(string) {
+		// 		// 登录成功
+		// 		// c.JSON(http.StatusOK, gin.H{"result": "ok"})
+		// 		resp.Result = "ok"
+		// 		resp.Body.Length = 0
+		// 		// return
+		// 	} else {
+		// 		resp.Result = "error"
+		// 		resp.Body.Length = 1
+		// 		resp.Body.Detail = "用户名或密码错误"
+		// 	}
+		// } else {
+		// 	resp.Result = "error"
+		// 	resp.Body.Length = 1
+		// 	resp.Body.Detail = "用户名或密码错误"
+		// }
 
-	if loginSuccess {
-		resp.Result = "ok"
-		resp.Body.Length = 0
-	} else {
-		resp.Result = "error"
-		resp.Body.Length = 1
-		resp.Body.Detail = "用户名或密码错误"
+		// // 将响应数据发送给客户端
+		// c.JSON(http.StatusOK, resp)
 	}
-
-	// 将响应数据发送给客户端
-	c.JSON(http.StatusOK, resp)
 }
 
 func submit(c *gin.Context) {

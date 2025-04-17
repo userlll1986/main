@@ -4,6 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//路由定义，实现接口的动态调用
+
 func ArticleRouter(group *gin.RouterGroup) {
 	// 文章相关的接口
 	article := group.Group("/article")
